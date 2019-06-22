@@ -40,6 +40,7 @@ See http://pypi.python.org/pypi/percache for usage instructions and examples.
 import hashlib
 import os
 import shelve
+import marshal
 import sys
 import time
 
@@ -92,12 +93,11 @@ class Cache(object):
         def wrapper(*args, **kwargs):
             """Function wrapping the decorated function."""
 
-            ckey = [func.__name__] # parameter hash
-            for a in args:
-                ckey.append(self.__repr(a))
+            ckey = [func.__code__] # parameter hash
+
             for k in sorted(kwargs):
                 ckey.append("%s:%s" % (k, self.__repr(kwargs[k])))
-            ckey = hashlib.sha1(''.join(ckey).encode("UTF8")).hexdigest()
+            ckey = hashlib.sha1(marshal.dumps(ckey)).hexdigest()
 
             if ckey in self.__cache:
                 result = self.__cache[ckey]
