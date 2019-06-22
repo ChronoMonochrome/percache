@@ -44,6 +44,8 @@ import marshal
 import sys
 import time
 
+from collections import OrderedDict
+
 # Py2/3 hack
 try:
     basestring = basestring
@@ -88,24 +90,25 @@ class Cache(object):
         """
         self.__livesync = livesync
         self.__repr = repr
+        self.opened = False
         if isinstance(backend, basestring):
             self.__cache = shelve.open(backend, protocol=-1)
+            self.opened = True
         elif backend:
             self.__cache = backend
+            self.opened = True
         self.check = self.__call__ # support old decorator interface
         self.prefix = prefix
 
     def func_cache_filename(self, func, *args, **kwargs):
         """Return cache filename for function func(*args, **kwargs)"""
 
-        ckey = [func.__name__] # parameter hash
+        ckey = str(func.__name__) # parameter hash
+        args = [str(a).split("object at")[0] for a in args]
+        ckey += str(args)
 
-        for a in args:
-            ckey.append(self.__repr(a))
-
-        filename = hashlib.sha1(''.join(ckey).encode("UTF8")).hexdigest()
         if self.prefix:
-            filename = self.prefix + "-" + filename
+            filename = self.prefix + "-" + ckey
 
         return filename
 
@@ -115,22 +118,18 @@ class Cache(object):
         def wrapper(*args, **kwargs):
             """Function wrapping the decorated function."""
 
-            if not "__cache" in self.__dict__:
+            cache_filename = self.func_cache_filename(func, *args, **kwargs)
+            if not self.opened:
                 cache_dir = "__percache__"
                 if not os.path.isdir(cache_dir):
                     os.makedirs(cache_dir)
-                cache_filename = self.func_cache_filename(func, *args, **kwargs)
                 backend = os.path.join(cache_dir, cache_filename)
                 self.__cache = shelve.open(backend, protocol=-1)
+                self.opened = True
 
-            ckey = [func.__code__] # parameter hash
-
-            for a in args:
-                ckey.append(self.__repr(a))
-
-            for k in sorted(kwargs):
-                ckey.append("%s:%s" % (k, self.__repr(kwargs[k])))
-            ckey = hashlib.sha1(marshal.dumps(ckey)).hexdigest()
+            ckey = cache_filename.encode("u8")
+            ckey += marshal.dumps(ckey)
+            ckey = hashlib.sha1(ckey).hexdigest()
 
             if ckey in self.__cache:
                 result = self.__cache[ckey]
@@ -147,7 +146,10 @@ class Cache(object):
     def __del__(self):
         """Closes the cache upon finalization."""
 
-        self.close()
+        try:
+            self.close()
+        except:
+            pass
 
     def close(self):
         """Close cache and save it to the backend."""
