@@ -76,86 +76,13 @@ Caching details (you should know)
 -------------------------------------------------------------------------------
 
 When caching the result of a callable, a SHA1 hash based on the callable's name
-and arguments is used as a key to store the result in the cache file.
-
-The hash calculation does not work directly with the arguments but with their
-*representations*, i.e. the string returned by applying ``repr()``. Argument
-representations are supposed to differentiate values sufficiently for the
-purpose of the function but identically across multiple invocations of the
-Python interpreter. By default the built-in function ``repr()`` is used to get
-argument representations. This is just perfect for basic types, lists, tuples
-and combinations of them but it may fail on other types:
-
-::
-
-    >>> repr(42)
-    42                                  # good
-    >>> repr(["a", "b", (1, 2L)])
-    "['a', 'b', (1, 2L)]"               # good
-    >>> o = object()
-    >>> repr(o)
-    '<object object at 0xb769a4f8>'     # bad (address is dynamic)
-    >>> repr({"a":1,"b":2,"d":4,"c":3})
-    "{'a': 1, 'c': 3, 'b': 2, 'd': 4}"  # bad (order may change)
-    >>> class A(object):
-    ...     def __init__(self, a):
-    ...         self.a = a
-    ...
-    >>> repr(A(36))
-    '<__main__.A object at 0xb725bb6c>' # bad (A.a not considered)
-    >>> repr(A(35))
-    '<__main__.A object at 0xb725bb6c>' # bad (A.a not considered)
-
-A *bad* representation is one that is not identically across Python invocations
-(all *bad* examples) or one that does not differentiate values sufficiently
-(last 2 *bad* examples).
-
-To use such types anyway you can either
-
-1. implement the type's ``__repr__()`` method accordingly or
-2. provide a custom representation function using the ``repr`` keyword of the
-   ``Cache`` constructor.
-
-Implement the ``__repr__()`` method
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To pass dictionaries to *percache* decorated functions, you could wrap them in
-an own dictionary type with a suitable ``__repr__()`` method:
-
-::
-
-    >>> class mydict(dict):
-    ...     def __repr__(self):
-    ...         items = ["%r: %r" % (k, self[k]) for k in sorted(self)]
-    ...         return "{%s}" % ", ".join(items)
-    ...
-    >>> repr(mydict({"a":1,"b":2,"d":4,"c":3}))
-    "{'a': 1, 'b': 2, 'c': 3, 'd': 4}"  # good (always same order)
-
-Provide a custom ``repr()`` function
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The following example shows how to use a custom representation function to get
-a suitable argument representation of ``file`` objects:
-
-::
-
-    >>> def myrepr(arg):
-    ...     if isinstance(arg, file):
-    ...         # return a string with file name and modification time
-    ...         return "%s:%s" % (arg.name, os.fstat(arg.fileno())[8])
-    ...     else:
-    ...         return repr(arg)
-    ...
-    >>> cache = percache.Cache("/some/path", repr=myrepr)
+and arguments is used as a name of the cache file. The content of this file is
+produced by using function ``dumps()`` of the python marshal module on the
+callable's attribute ``__code__`` and hashing the result using SHA1.
 
 -------------------------------------------------------------------------------
 Housekeeping
 -------------------------------------------------------------------------------
-
-
-- Make sure to delete the cache file whenever the behavior of a cached function
-  has changed!
 
 - To prevent the cache from getting larger and larger you can call the
   ``clear()`` method of a ``Cache`` instance. By default it clears *all*
