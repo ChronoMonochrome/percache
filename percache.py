@@ -55,7 +55,7 @@ except NameError:
 class Cache(object):
     """Persistent cache for results of callables."""
 
-    def __init__(self, backend=None, prefix="", repr=repr, livesync=False):
+    def __init__(self, backend=None, prefix="", repr=repr, livesync=True):
         """Create a new persistent cache using the given backend.
 
         If backend is a string, it is interpreted as a filename and a Python
@@ -88,10 +88,9 @@ class Cache(object):
         """
         self.__livesync = livesync
         self.__repr = repr
-        if isinstance(backend, basestring):
-            self.__cache = shelve.open(backend, protocol=-1)
-        elif backend:
-            self.__cache = backend
+        self.backend = backend
+        if backend:
+            self.open()
         self.check = self.__call__ # support old decorator interface
         self.prefix = prefix
 
@@ -120,8 +119,8 @@ class Cache(object):
                 if not os.path.isdir(cache_dir):
                     os.makedirs(cache_dir)
                 cache_filename = self.func_cache_filename(func, *args, **kwargs)
-                backend = os.path.join(cache_dir, cache_filename)
-                self.__cache = shelve.open(backend, protocol=-1)
+                self.backend = os.path.join(cache_dir, cache_filename)
+                self.open()
 
             ckey = [func.__code__] # parameter hash
 
@@ -138,8 +137,9 @@ class Cache(object):
                 result = func(*args, **kwargs)
                 self.__cache[ckey] = result
             self.__cache["%s:atime" % ckey] = time.time() # access time
-            if self.__livesync:
-                self.__cache.sync()
+
+            self.close()
+
             return result
 
         return wrapper
@@ -153,6 +153,13 @@ class Cache(object):
         """Close cache and save it to the backend."""
 
         self.__cache.close()
+
+    def open(self):
+        """Open cache."""
+        if isinstance(self.backend, basestring):
+            self.__cache = shelve.open(self.backend, protocol=-1)
+        elif self.backend:
+            self.__cache = self.backend
 
     def clear(self, maxage=0):
         """Clear all cached results or those not used for `maxage` seconds."""
