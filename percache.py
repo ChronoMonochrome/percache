@@ -55,13 +55,17 @@ except NameError:
 class Cache(object):
     """Persistent cache for results of callables."""
 
-    def __init__(self, backend, repr=repr, livesync=False):
+    def __init__(self, backend = None, repr=repr, livesync=False):
         """Create a new persistent cache using the given backend.
 
-    	If backend is a string, it is interpreted as a filename and a Python
-    	shelve is used as the backend. Otherwise it is interpreted as a
-    	mapping-like object with a `close()` and a `sync()`  method. This
-    	allows to use alternative backends like *shove* or *redis*.
+        If backend is a string, it is interpreted as a filename and a Python
+        shelve is used as the backend. If backend is None, a cache file will
+        be stored in the `__percache__` directory, relatively to the working
+        directory of script creating Cache object.
+
+        Otherwise it is interpreted as a mapping-like object with a `close()`
+        and a `sync()`  method. This allows to use alternative backends like
+        *shove* or *redis*.
 
     	The keyword `repr` may specify an alternative representation function
     	to be applied to the arguments of callables to cache. The
@@ -83,9 +87,19 @@ class Cache(object):
         self.__repr = repr
         if isinstance(backend, basestring):
             self.__cache = shelve.open(backend, protocol=-1)
-        else:
+        elif backend:
             self.__cache = backend
         self.check = self.__call__ # support old decorator interface
+
+    def func_cache_filename(self, func, *args, **kwargs):
+        """Return cache filename for function func(*args, **kwargs)"""
+
+        ckey = [func.__name__] # parameter hash
+
+        for a in args:
+            ckey.append(self.__repr(a))
+
+        return hashlib.sha1(''.join(ckey).encode("UTF8")).hexdigest()
 
     def __call__(self, func):
         """Decorator function for caching results of a callable."""
@@ -93,7 +107,18 @@ class Cache(object):
         def wrapper(*args, **kwargs):
             """Function wrapping the decorated function."""
 
+            if not "__cache" in self.__dict__:
+                cache_dir = "__percache__"
+                if not os.path.isdir(cache_dir):
+                    os.makedirs(cache_dir)
+                cache_filename = self.func_cache_filename(func, *args, **kwargs)
+                backend = os.path.join(cache_dir, cache_filename)
+                self.__cache = shelve.open(backend, protocol=-1)
+
             ckey = [func.__code__] # parameter hash
+
+            for a in args:
+                ckey.append(self.__repr(a))
 
             for k in sorted(kwargs):
                 ckey.append("%s:%s" % (k, self.__repr(kwargs[k])))

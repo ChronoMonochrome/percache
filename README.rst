@@ -25,9 +25,7 @@ Example
 ::
 
     >>> import percache
-    >>> cache = percache.Cache("/tmp/my-cache")
-    >>>
-    >>> @cache
+    >>> @percache.Cache()
     ... def longtask(a, b):
     ...     print("running a long task")
     ...     return a + b
@@ -38,7 +36,6 @@ Example
     >>>
     >>> longtask(1, 2)
     3
-    >>> cache.close() # writes new cached results to disk
 
 As you can see at the missing output after the second invocation, ``longtask``
 has been called once only. The second time the result is retrieved from the
