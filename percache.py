@@ -55,7 +55,7 @@ except NameError:
 class Cache(object):
     """Persistent cache for results of callables."""
 
-    def __init__(self, backend = None, repr=repr, livesync=False):
+    def __init__(self, backend=None, prefix="", repr=repr, livesync=False):
         """Create a new persistent cache using the given backend.
 
         If backend is a string, it is interpreted as a filename and a Python
@@ -66,6 +66,9 @@ class Cache(object):
         Otherwise it is interpreted as a mapping-like object with a `close()`
         and a `sync()`  method. This allows to use alternative backends like
         *shove* or *redis*.
+
+        The keyword `prefix` allows to specify a prefix prepended to cache
+        filename. This is only meaningful if backend is None.
 
     	The keyword `repr` may specify an alternative representation function
     	to be applied to the arguments of callables to cache. The
@@ -90,6 +93,7 @@ class Cache(object):
         elif backend:
             self.__cache = backend
         self.check = self.__call__ # support old decorator interface
+        self.prefix = prefix
 
     def func_cache_filename(self, func, *args, **kwargs):
         """Return cache filename for function func(*args, **kwargs)"""
@@ -99,7 +103,11 @@ class Cache(object):
         for a in args:
             ckey.append(self.__repr(a))
 
-        return hashlib.sha1(''.join(ckey).encode("UTF8")).hexdigest()
+        filename = hashlib.sha1(''.join(ckey).encode("UTF8")).hexdigest()
+        if self.prefix:
+            filename = self.prefix + "-" + filename
+
+        return filename
 
     def __call__(self, func):
         """Decorator function for caching results of a callable."""
