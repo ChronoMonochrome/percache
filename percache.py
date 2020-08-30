@@ -104,7 +104,7 @@ class Cache(object):
         """Return cache filename for function func(*args, **kwargs)"""
 
         ckey = str(func.__name__) # parameter hash
-        args = [str(a).split("object at")[0] for a in args]
+        args = [str(a).split("object at")[0].replace("/", "%2f%").replace("\\", "%5c%") for a in args]
         ckey += str(args)
 
         if self.prefix:
